@@ -63,6 +63,7 @@ export function Explore() {
   const [gainers, setGainers] = useState<Mover[]>([])
   const [losers, setLosers] = useState<Mover[]>([])
   const [spotlight, setSpotlight] = useState<WatchlistSpot[]>([])
+  const [hasStocks, setHasStocks] = useState(false)
   const [moversLoading, setMoversLoading] = useState(true)
   const [indicesLoading, setIndicesLoading] = useState(true)
   const [tab, setTab] = useState<'gainers' | 'losers'>('gainers')
@@ -80,7 +81,9 @@ export function Explore() {
     }).catch(() => setMoversLoading(false))
 
     api.get('/watchlist').then(r => {
-      const items: WatchlistSpot[] = (r.data.stocks ?? [])
+      const all: WatchlistSpot[] = r.data.stocks ?? []
+      setHasStocks(all.length > 0)
+      const items = all
         .filter((i: WatchlistSpot) => i.priority === 'HIGH' || i.priority === 'MEDIUM')
         .slice(0, 3)
       setSpotlight(items)
@@ -294,27 +297,29 @@ export function Explore() {
               )}
             </div>
 
-            {/* What makes Pulse different */}
-            <div style={{
-              marginTop: '1rem',
-              background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: '12px', padding: '1rem 1.25rem',
-            }}>
-              <p style={{ margin: '0 0 0.625rem', fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>
-                Why Pulse?
-              </p>
-              {[
-                { icon: '📊', text: 'Z-score scoring — flags moves unusual for that stock, not just large ones' },
-                { icon: '⏱', text: 'Remembers when you last checked — quiet → sudden move = bigger flag' },
-                { icon: '🎯', text: 'Sensitivity controls — tell Pulse if a stock is naturally volatile' },
-                { icon: '📓', text: 'Journal your thesis — see if the market proved you right' },
-              ].map(({ icon, text }) => (
-                <div key={text} style={{ display: 'flex', gap: '0.625rem', marginBottom: '0.5rem' }}>
-                  <span style={{ fontSize: '0.875rem', lineHeight: '1.5', flexShrink: 0 }}>{icon}</span>
-                  <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{text}</p>
-                </div>
-              ))}
-            </div>
+            {/* What makes Pulse different — only shown to new users */}
+            {!hasStocks && (
+              <div style={{
+                marginTop: '1rem',
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                borderRadius: '12px', padding: '1rem 1.25rem',
+              }}>
+                <p style={{ margin: '0 0 0.625rem', fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>
+                  Why Pulse?
+                </p>
+                {[
+                  { icon: '📊', text: 'Z-score scoring — flags moves unusual for that stock, not just large ones' },
+                  { icon: '⏱', text: 'Remembers when you last checked — quiet → sudden move = bigger flag' },
+                  { icon: '🎯', text: 'Sensitivity controls — tell Pulse if a stock is naturally volatile' },
+                  { icon: '📓', text: 'Journal your thesis — see if the market proved you right' },
+                ].map(({ icon, text }) => (
+                  <div key={text} style={{ display: 'flex', gap: '0.625rem', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '0.875rem', lineHeight: '1.5', flexShrink: 0 }}>{icon}</span>
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{text}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </main>
