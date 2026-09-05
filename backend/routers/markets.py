@@ -63,28 +63,50 @@ _NSE100_SYMBOLS = [
 ]
 
 
-def _fetch_mover(sym: str):
+def _fetch_all_movers() -> list[dict]:
+    """Batch-fetch 2-day history for all symbols to compute change_pct efficiently."""
     try:
-        info = yf.Ticker(sym).fast_info
-        price = getattr(info, "last_price", None) or getattr(info, "previous_close", None)
-        prev = getattr(info, "previous_close", None)
-        if not price or not prev or prev == 0:
-            return None
-        change_pct = (price - prev) / prev * 100
-        return {"symbol": sym.replace(".NS", ""), "price": round(float(price), 2), "change_pct": round(float(change_pct), 2)}
+        raw = yf.download(
+            " ".join(_NSE100_SYMBOLS),
+            period="2d",
+            auto_adjust=True,
+            progress=False,
+            threads=True,
+        )
+        closes = raw["Close"] if "Close" in raw else raw
+        results = []
+        for sym in _NSE100_SYMBOLS:
+            try:
+                col = sym if sym in closes.columns else None
+                if col is None:
+                    continue
+                series = closes[col].dropna().tolist()
+                if len(series) < 2:
+                    continue
+                prev, curr = series[-2], series[-1]
+                if prev == 0:
+                    continue
+                change_pct = (curr - prev) / prev * 100
+                results.append({
+                    "symbol": sym.replace(".NS", ""),
+                    "price": round(float(curr), 2),
+                    "change_pct": round(float(change_pct), 2),
+                })
+            except Exception:
+                continue
+        return results
     except Exception:
-        return None
+        return []
 
 
 @router.get("/movers")
 async def get_market_movers():
-    """Top gainers and losers from NSE large-cap universe."""
-    results = await asyncio.gather(*[asyncio.to_thread(_fetch_mover, s) for s in _NSE100_SYMBOLS])
-    valid = [r for r in results if r is not None]
-    valid.sort(key=lambda x: x["change_pct"], reverse=True)
+    """Top gainers and losers from NSE large-cap universe (batch fetch)."""
+    results = await asyncio.to_thread(_fetch_all_movers)
+    results.sort(key=lambda x: x["change_pct"], reverse=True)
     return {
-        "gainers": valid[:5],
-        "losers": list(reversed(valid[-5:])),
+        "gainers": results[:5],
+        "losers": list(reversed(results[-5:])) if len(results) >= 5 else results[:5],
     }
 
 
