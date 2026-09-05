@@ -112,7 +112,7 @@ export function Explore() {
           }}>
             {indicesLoading
               ? Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} style={{ height: '80px', background: 'var(--surface)' }} />
+                  <div key={i} className="skeleton" style={{ height: '80px', borderRadius: 0 }} />
                 ))
               : indices.slice(0, 5).map(idx => {
                   const positive = idx.change_pct >= 0
@@ -136,7 +136,7 @@ export function Explore() {
         </div>
 
         {/* ── Two-column layout ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '2rem', alignItems: 'start' }}>
+        <div className="explore-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '2rem', alignItems: 'start' }}>
 
           {/* Left: Top movers */}
           <div>
@@ -160,7 +160,7 @@ export function Explore() {
             {moversLoading ? (
               <div style={{ display: 'flex', gap: '0.75rem', overflow: 'hidden' }}>
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} style={{ width: '130px', height: '110px', borderRadius: '10px', background: 'var(--surface)', border: '1px solid var(--border)', flexShrink: 0 }} />
+                  <div key={i} className="skeleton" style={{ width: '130px', height: '110px', borderRadius: '10px', flexShrink: 0 }} />
                 ))}
               </div>
             ) : (

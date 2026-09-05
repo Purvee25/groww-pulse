@@ -28,7 +28,9 @@ function MoonIcon() {
 export function NavBar() {
   const location = useLocation()
   const navigate = useNavigate()
-  const [theme, setTheme] = useState<'light' | 'dark'>('light')
+  const [theme, setTheme] = useState<'light' | 'dark'>(
+    () => (localStorage.getItem('groww-pulse-theme') as 'light' | 'dark') ?? 'dark'
+  )
   const [circuitState, setCircuitState] = useState<'CLOSED' | 'OPEN' | 'HALF_OPEN'>('CLOSED')
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 

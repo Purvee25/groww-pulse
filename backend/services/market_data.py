@@ -85,14 +85,29 @@ def fetch_index_return_pct(period_days: float = 1.0) -> float:
 
 
 def fetch_index_quote(symbol: str) -> dict | None:
-    """Fetch current price + change % for a market index (e.g., ^NSEI, ^BSESN)."""
+    """Fetch current price + change % for a market index (e.g., ^NSEI, ^BSESN).
+
+    Falls back to 2-day history computation when regularMarketChangePercent is 0
+    (weekends, market-closed hours, yfinance cache lag).
+    """
     try:
         ticker = yf.Ticker(symbol)
         info = ticker.fast_info
         price = info.get("lastPrice")
         if price is None:
             return None
-        change_pct = info.get("regularMarketChangePercent", 0.0) or 0.0
-        return {"symbol": symbol, "price": float(price), "change_pct": float(change_pct)}
+        change_pct = float(info.get("regularMarketChangePercent", 0.0) or 0.0)
+        # When change_pct is 0 (closed market / yfinance stale), compute from history
+        if change_pct == 0.0:
+            try:
+                hist = ticker.history(period="5d", auto_adjust=True)
+                closes = hist["Close"].dropna().tolist()
+                if len(closes) >= 2:
+                    prev, curr = closes[-2], closes[-1]
+                    if prev > 0:
+                        change_pct = round((curr - prev) / prev * 100, 2)
+            except Exception:
+                pass
+        return {"symbol": symbol, "price": float(price), "change_pct": change_pct}
     except Exception:
         return None

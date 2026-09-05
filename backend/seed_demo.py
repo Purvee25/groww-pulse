@@ -29,12 +29,11 @@ DEMO_STOCKS = [
     {
         "symbol": "RELIANCE.NS",
         "sensitivity": "normal",
-        # Normal volatility ≈ ±0.3%/day; 3-day cumulative signal = +6.1%
-        # checkpoint_offset = -6.1% from current (set explicitly in seed)
         "daily_vol_pct": 0.3,
-        "signal_3d_pct": 6.1,   # checkpoint set to current / (1 + 6.1/100)
+        "signal_3d_pct": 6.1,
         "hist_returns": [0.3, -0.2, 0.1, 0.4, -0.3, 0.2, -0.1, 0.3, 0.2, -0.2,
                          0.1, 0.3, -0.2, 0.4, 0.1, -0.3, 0.2, 0.1, 2.8, 3.1],
+        "thesis": "Diversified energy play, expecting Jio Financial spinoff to unlock value",
     },
     {
         "symbol": "TCS.NS",
@@ -43,6 +42,7 @@ DEMO_STOCKS = [
         "signal_3d_pct": 4.2,
         "hist_returns": [0.1, -0.1, 0.2, 0.1, -0.2, 0.1, 0.0, 0.1, -0.1, 0.2,
                          0.1, -0.1, 0.1, 0.2, -0.1, 0.1, 0.0, -0.1, 1.9, 2.2],
+        "thesis": "AI-led IT upcycle; strong deal pipeline with GenAI wins in BFSI vertical",
     },
     {
         "symbol": "INFY.NS",
@@ -51,22 +51,25 @@ DEMO_STOCKS = [
         "signal_3d_pct": 2.1,
         "hist_returns": [0.4, -0.3, 0.5, -0.2, 0.3, 0.4, -0.5, 0.2, 0.3, -0.4,
                          0.2, 0.5, -0.3, 0.4, 0.2, -0.5, 0.3, 0.4, 0.8, 1.1],
+        "thesis": "Watching margin recovery; FY25 guidance revision is the trigger to act",
     },
     {
         "symbol": "HDFCBANK.NS",
         "sensitivity": "quiet",
         "daily_vol_pct": 0.2,
-        "signal_3d_pct": 0.3,   # quiet stock, barely moved — LOW
+        "signal_3d_pct": 0.3,
         "hist_returns": [0.2, -0.1, 0.3, -0.2, 0.1, 0.2, -0.1, 0.2, 0.1, -0.2,
                          0.1, 0.2, -0.1, 0.3, 0.2, -0.2, 0.1, 0.2, -0.1, 0.2],
+        "thesis": "Post-merger NIM compression overhang; waiting for deposit growth to stabilise",
     },
     {
         "symbol": "BHARTIARTL.NS",
         "sensitivity": "loud",
         "daily_vol_pct": 1.1,
-        "signal_3d_pct": 1.5,   # loud stock, big vol → LOW despite visible move
+        "signal_3d_pct": 1.5,
         "hist_returns": [1.2, -1.1, 1.5, -0.8, 1.0, 1.3, -1.2, 0.9, 1.1, -1.0,
                          1.2, -0.9, 1.4, -1.1, 1.0, 1.2, -0.8, 1.3, -1.0, 1.1],
+        "thesis": None,
     },
     {
         "symbol": "SBIN.NS",
@@ -75,6 +78,7 @@ DEMO_STOCKS = [
         "signal_3d_pct": 3.0,
         "hist_returns": [0.4, -0.5, 0.6, -0.3, 0.5, 0.4, -0.6, 0.5, 0.4, -0.5,
                          0.3, 0.5, -0.4, 0.6, 0.5, -0.3, 0.4, 0.5, 1.2, 1.5],
+        "thesis": None,
     },
 ]
 
@@ -165,11 +169,14 @@ def seed_demo():
                 .filter(WatchlistItem.user_id == user.id, WatchlistItem.symbol == symbol)
                 .first()
             )
+            thesis = stock.get("thesis")
             if existing:
-                # Update checkpoint so return is non-zero
                 existing.last_seen_price = round(checkpoint_price, 2)
                 existing.last_seen_at = checkpoint_time
                 existing.sensitivity = stock["sensitivity"]
+                if thesis and not existing.thesis:
+                    existing.thesis = thesis
+                    existing.thesis_updated_at = now - timedelta(days=2)
             else:
                 item = WatchlistItem(
                     user_id=user.id,
@@ -178,6 +185,8 @@ def seed_demo():
                     added_at=now - timedelta(days=20),
                     last_seen_price=round(checkpoint_price, 2),
                     last_seen_at=checkpoint_time,
+                    thesis=thesis,
+                    thesis_updated_at=(now - timedelta(days=2)) if thesis else None,
                 )
                 db.add(item)
                 db.flush()
