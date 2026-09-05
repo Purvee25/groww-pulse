@@ -1,79 +1,106 @@
-# Technical Decisions
+# Engineering Decisions
 
-Every non-obvious choice in Groww Pulse with the reasoning behind it.
+Every non-obvious design choice in Groww Pulse — what we chose, what we rejected, and why.
 
-## Why z-score, not raw percentage change?
+---
 
-**The problem:** A 2% drop in HDFC Bank is noise. A 2% drop in a boring, slow-moving utility stock might be the signal of a decade. Raw percentage treats them identically.
+## 1. Z-score over raw percentage change
 
-**The solution:** Normalize each move by that stock's own historical volatility.
+**Decision:** Rank stocks by `z = Δ_adj / (σ × √n)`, not by `|Δ%|`.
 
-```
-z = stock_return / (historical_volatility × sqrt(elapsed_ticks))
-```
+**Why:** Raw percentage change is magnitude without context. A 2% move on HDFCBANK (daily σ ≈ 0.2%) is 10σ — extraordinary. A 2% move on BHARTIARTL (σ ≈ 1.1%) is under 2σ — unremarkable. Every standard watchlist shows the same number for both. Groww Pulse shows you which one actually changed.
 
-This means a 1% move in a stock with 0.2% daily volatility scores **5σ** — rare, worth attention. The same 1% move in a stock with 1.5% daily volatility scores **0.67σ** — noise, ignore it.
+**What we rejected:** Simple threshold rules ("flag anything > X%") are constant regardless of the stock's historical behavior. They produce noise on volatile stocks and miss signals on stable ones. Percentile-rank across the portfolio was considered but collapses to one always being "highest" even when nothing moved.
 
-**Alternative considered:** Bollinger Bands. Rejected because they're designed for visual chart reading, not ranking. Z-scores are unit-free so we can rank across all stocks with a single threshold.
+---
 
-## Why the time-decay (sqrt elapsed)?
+## 2. Trading-hours elapsed time, not wall-clock
 
-Stock returns scale with `sqrt(time)` under the random-walk / geometric Brownian motion model — the same model options pricing uses. If a stock normally moves ±0.5% per day, after 4 days of silence you'd expect it to have moved up to ±1% (0.5 × √4). So "unchanged for 4 days then moving 1%" is not actually unusual — our expected volatility window grows accordingly.
+**Decision:** `elapsed_seconds` passed to `compute_z_score` counts only IST market-hours seconds (9:15am–3:30pm, Mon–Fri). Nights, weekends, and holidays count as zero.
 
-This prevents alert fatigue: a stock you haven't checked in a week doesn't suddenly become HIGH priority just because it moved the amount you'd expect over a week.
+**Why:** The Z-score time-decay term `σ × √n` models how far a random walk is expected to drift over `n` ticks. But a stock can't drift when the exchange is closed — the price is frozen. A checkpoint set Friday at 3:29pm and checked Monday at 9:16am has one trading minute of elapsed market time, not 64 hours. Using wall-clock time would deflate the Z-score for every Monday-morning check-in, making the system systematically under-sensitive after weekends and holidays — exactly when the most important overnight news arrives.
 
-## Why sensitivity multipliers (`quiet: 1.75, normal: 1.0, loud: 0.6`)?
+**Implementation:** `trading_seconds_elapsed(since, until)` in `services/attention_score.py` iterates day-by-day, accumulating only the intersection of each calendar day with the `[9:15, 15:30]` IST window.
 
-Not every stock deserves the same alert threshold. A user watching a volatile small-cap for trading should get fewer alerts (loud: 0.6×). A user watching a safe blue-chip for portfolio balance should get earlier warnings (quiet: 1.75×).
+---
 
-The multipliers are applied to the **effective** score before classification, not to the raw price data — this way, the scoring engine stays purely statistical while user preferences live in a separate layer.
+## 3. Beta-residual neutralization
 
-The values 1.75 / 1.0 / 0.6 were chosen so:
-- Quiet (1.75×): a 1.3σ move classifies as HIGH instead of MEDIUM
-- Loud (0.6×): a 2.5σ move classifies as MEDIUM instead of HIGH
+**Decision:** Score the beta-adjusted residual `Δ_adj = Δ_stock − (β × Δ_NIFTY)`, not the raw stock return.
 
-## Why FastAPI over Django/Flask?
+**Why:** On a day NIFTY rises 1.5% and RELIANCE (β ≈ 1.0) rises 1.6%, the raw return looks like a signal. But 1.5% of that move is just the market. The idiosyncratic component is 0.1% — which is noise, not a signal. Without beta adjustment, every broad market rally produces a flood of false HIGH alerts across the entire watchlist. With it, only stocks that moved **more or less than their beta predicts** rank high.
 
-- Async I/O by default — critical for yfinance batch fetches and WebSocket connections that run concurrently
-- Pydantic schemas are the request/response contract, not an afterthought — prevents the ORM model leaking into the API
-- OpenAPI docs generated automatically — free dev tooling
-- Type checking at the boundary catches bugs before they reach the DB
+**What we rejected:** Equal-weighting every stock's return against its own volatility (without subtracting market beta) is mathematically simpler but conflates market-driven and stock-driven moves. Sector-relative adjustment was also implemented as a fallback (`get_sector_return` in `services/market_stats.py`) but used only when beta data is unavailable.
 
-Flask was considered; rejected for lack of native async. Django REST Framework was rejected as too heavyweight for a focused microservice.
+---
 
-## Why yfinance?
+## 4. Circuit breaker over retry loops
 
-Free, no API key, Python-native. For a hackathon judged on the idea, paying for a Bloomberg terminal or Alpha Vantage subscription adds friction with no benefit to the demo.
+**Decision:** Three-state machine (CLOSED → OPEN → HALF_OPEN) that serves `data/offline_snapshot.json` during outages, not a retry loop.
 
-The known limitation: yfinance has rate limits and occasionally returns stale data. The scheduler runs every 5 minutes and caches results in PostgreSQL, so the UI is always serving DB data, not live yfinance calls per request.
+**Why:** yfinance rate-limits at ~2000 requests/day. Under load or during NSE maintenance windows, the naive retry approach hammers the API, exhausts the quota, and makes every subsequent request fail. The circuit breaker trips after 3 consecutive failures, stops sending requests entirely for 60 seconds, then probes with a single request before fully reopening. Total API calls during a 60-second outage: **1** (the probe), not hundreds.
 
-## Why PostgreSQL over SQLite?
+**State design:** HALF_OPEN exists to prevent the thundering-herd problem — if every instance probed simultaneously on cooldown expiry, you'd just re-trigger the outage. Only one probe goes out; on success, CLOSED is restored for everyone.
 
-SQLite is fine for local dev but breaks under concurrent writes — two WebSocket clients updating the same watchlist row simultaneously would lock. PostgreSQL's row-level locking handles this correctly and is the standard for production deployments. The Docker Compose setup provisions it automatically, so the dev experience is identical.
+**What we rejected:** Exponential backoff with jitter is correct for transient failures but doesn't have a "stop sending" mode. The circuit breaker is strictly superior when you need to protect a shared third-party rate limit rather than a personal endpoint.
 
-## Why nginx as reverse proxy?
+---
 
-Single origin for the browser: `/api/*` proxies to FastAPI, `/ws` proxies to the WebSocket handler, everything else serves the React SPA from static files. This means:
-- No CORS headers needed in FastAPI (same origin)
-- WebSocket upgrade is handled cleanly at the nginx layer
-- Static serving is fast (nginx's job) vs. FastAPI serving files (not its job)
+## 5. 30-day elapsed time cap (MAX_ELAPSED_SECONDS)
 
-## Why second clock memory?
+**Decision:** Cap elapsed trading time at `30 × 24 × 3600` seconds (30 calendar days), regardless of actual checkpoint age.
 
-The user's last-checked timestamp per stock is stored as `last_checkpoint`. Elapsed time since that checkpoint feeds directly into the time-decay calculation. This means:
-- A stock the user checked 10 minutes ago needs a bigger move to surface
-- A stock unchecked for 3 days surfaces with a much lower move threshold
+**Why:** `σ × √n` grows without bound. A checkpoint left untouched for 6 months produces an enormous `expected_volatility`, which drives Z-scores toward zero for every move — the system concludes nothing is ever significant because it's been "long enough for anything to happen." The 30-day cap says: a checkpoint older than a month is treated as maximally stale. Any move is then scored against the same (high) expected volatility floor, which is conservative — you may miss some signals, but you won't miss them because of unbounded time-decay.
 
-This is the "second clock" — it makes the attention score personal, not just statistical. Two users watching the same stock see different priorities based on when they last looked.
+**Why 30 days, not 7 or 90:** 30 days covers one full earnings cycle. Beyond that, the user's original thesis is almost certainly stale regardless of price. The cap is a forcing function to review old positions, not a concession to the math.
 
-## Why NOT to use ML for scoring?
+---
 
-Considered: train a classifier to predict "worth looking at" from historical data.
+## 6. Formal invariant test suite over coverage-based tests
 
-Rejected because:
-1. The label is subjective — "worth looking at" depends on the user's thesis
-2. It would require labeled training data we don't have
-3. The z-score is explainable — users can see *why* something is flagged ("+2.3% · 3.1σ vs sector")
-4. ML models are black boxes that judges at a hackathon can't verify
+**Decision:** Write 5 mathematical invariants (`tests/test_invariants.py`) instead of aiming for line coverage.
 
-The statistical model earns its complexity by being auditable.
+**Why:** Coverage tells you which lines ran. It doesn't tell you whether the math is correct. The invariants test properties the system must hold forever:
+- Idempotency: same inputs always produce same outputs
+- Variance clamping: elapsed > 30d is always capped
+- Tenant isolation: compute layer has no cross-user state
+- Beta neutrality: a stock moving exactly with its beta always scores LOW
+- Degraded fallback: zero vol / None elapsed / network failure never crashes
+
+A test suite that achieves 100% coverage but doesn't test any of these properties can still ship a system that gives different users different scores for the same stock (tenant isolation violation), or crashes on a valid edge input (zero volatility division).
+
+---
+
+## 7. Decision Journal as a first-class feature
+
+**Decision:** Store a thesis per watchlist item and generate a deterministic verdict (`SUPPORTED / CHALLENGED / NEUTRAL`) when the attention score fires.
+
+**Why:** Watchlists typically answer "what moved?" Groww Pulse answers "did what moved matter **to you**?" The thesis field turns a passive price alert into an active reasoning check. The verdict is explicitly a **heuristic, not AI** — the system never reads the thesis text, only checks move direction and significance. This is documented in the code (`thesis_watchdog` in `attention_score.py`) to prevent any misrepresentation.
+
+**What we rejected:** LLM-based thesis evaluation was considered but rejected: it introduces an external API dependency, latency, cost, and unpredictable outputs for a function that only needs to ask "did the stock go up or down by a lot?" The deterministic rule is correct, auditable, and always consistent.
+
+---
+
+## 8. Gap-open detection at market open
+
+**Decision:** In the scheduler, compare the first price snapshot after 9:15am IST to the previous session's last snapshot. If the gap exceeds ±2%, log a `GAP_OPEN` event.
+
+**Why:** Overnight gap-opens in Indian markets are a qualitatively different event from intraday volatility. They represent information that arrived while the exchange was closed — earnings releases, RBI announcements, global cues from US/EU markets. A stock that gaps up 3% at open has not been "volatile" in the intraday sense; it has been re-priced by the market consensus at a single point. The Z-score time-decay (which models continuous drift) understates the significance of a gap. Flagging it separately ensures the user sees it even if the intraday Z-score hasn't crossed a threshold yet.
+
+**Threshold — why 2%:** NSE circuit limits for large-caps are typically 5–20%. A 2% gap is economically meaningful (larger than most large-cap daily σ) without being so sensitive that normal open-price oscillations trigger it.
+
+---
+
+## 9. Seed checkpoint anchored to live price, not hardcoded
+
+**Decision:** `seed_demo.py` computes `checkpoint_price = anchor_price / (1 + signal_3d_pct / 100)` where `anchor_price` is the latest actual `PriceSnapshot` from the DB.
+
+**Why:** The original seed used hardcoded prices (RELIANCE = ₹2840, TCS = ₹3890, etc.) and computed checkpoint as `prices[-4]` from a synthetic price series. When live yfinance prices arrived (RELIANCE ≈ ₹1322), the return was computed as `(1322 − 2840) / 2840 = −53%` — a crash, not a signal. By anchoring checkpoint to the actual live price, the 3-day signal is always exactly `signal_3d_pct` regardless of what the live market price is.
+
+---
+
+## 10. Rate limiting at 60 req/min per IP without Redis
+
+**Decision:** In-memory `defaultdict(list)` with sliding-window eviction in `main.py`, not Redis + token bucket.
+
+**Why:** For a single-instance Docker deployment, in-process rate limiting is correct and zero-dependency. Redis would be correct for a horizontally-scaled fleet where rate limits need to be coordinated across instances. For this deployment topology, adding Redis just to rate-limit adds one more infrastructure component that can fail. The trade-off is explicit: if you scale to multiple instances, replace this with Redis + Lua script.

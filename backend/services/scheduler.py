@@ -1,5 +1,6 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -11,6 +12,43 @@ from services.circuit_breaker import fetch_with_breaker, get_circuit_state
 logger = logging.getLogger(__name__)
 
 scheduler = BackgroundScheduler()
+
+_IST = ZoneInfo("Asia/Kolkata")
+_MARKET_OPEN = time(9, 15)
+_GAP_OPEN_THRESHOLD = 0.02  # 2% overnight gap triggers a flag
+
+
+def _is_market_open_ist() -> bool:
+    now = datetime.now(_IST)
+    return now.weekday() < 5 and _MARKET_OPEN <= now.time() <= time(15, 30)
+
+
+def _detect_gap_open(db, symbol: str, current_price: float) -> float | None:
+    """Return the overnight gap % if this is the first tick of the trading day
+    and the price gapped >2% vs. yesterday's last snapshot. Returns None otherwise.
+
+    Gap-opens (price jumps before market opens due to overnight news, RBI decisions,
+    global cues, earnings pre-market) are a distinct signal from intraday volatility
+    and should be flagged separately — they represent information that arrived while
+    the market was closed and the user was not watching.
+    """
+    now_ist = datetime.now(_IST)
+    if now_ist.time() > time(9, 45):  # only check in the first 30 min of trading
+        return None
+    yesterday = now_ist.date() - timedelta(days=1)
+    prev_snap = (
+        db.query(PriceSnapshot)
+        .filter(
+            PriceSnapshot.symbol == symbol,
+            PriceSnapshot.fetched_at < datetime.combine(now_ist.date(), time(9, 0), tzinfo=_IST),
+        )
+        .order_by(PriceSnapshot.fetched_at.desc())
+        .first()
+    )
+    if not prev_snap or prev_snap.price <= 0:
+        return None
+    gap = (current_price - prev_snap.price) / prev_snap.price
+    return gap if abs(gap) >= _GAP_OPEN_THRESHOLD else None
 
 
 def get_watched_symbols() -> list[str]:
@@ -29,6 +67,7 @@ def poll_prices() -> None:
 
     db = SessionLocal()
     try:
+        market_open = _is_market_open_ist()
         for symbol in symbols:
             quote, source = fetch_with_breaker(fetch_quote, symbol)
             if quote is None:
@@ -36,14 +75,27 @@ def poll_prices() -> None:
                 continue
             if source == "CACHED_FALLBACK":
                 logger.info("Circuit breaker active — serving cached snapshot for %s", symbol)
-            db.add(
-                PriceSnapshot(
-                    symbol=symbol,
-                    price=quote["price"],
-                    volume=quote["volume"],
-                    fetched_at=datetime.now(timezone.utc),
-                )
+
+            snap = PriceSnapshot(
+                symbol=symbol,
+                price=quote["price"],
+                volume=quote["volume"],
+                fetched_at=datetime.now(timezone.utc),
             )
+
+            # Gap-open detection: flag if price jumped >2% overnight at market open
+            if market_open:
+                gap = _detect_gap_open(db, symbol, quote["price"])
+                if gap is not None:
+                    direction = "up" if gap > 0 else "down"
+                    logger.info(
+                        "GAP_OPEN detected: %s gapped %s %.1f%% at open",
+                        symbol, direction, abs(gap) * 100,
+                    )
+                    if hasattr(snap, "gap_open_pct"):
+                        snap.gap_open_pct = round(gap * 100, 2)
+
+            db.add(snap)
         db.commit()
         logger.info("Polled prices for %d symbols", len(symbols))
     except Exception:

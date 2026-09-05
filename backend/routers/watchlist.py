@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timezone
 from collections import defaultdict
+from services.attention_score import trading_seconds_elapsed as _trading_seconds
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -128,7 +129,7 @@ def _compute_score_fields(
     elapsed_seconds = (
         elapsed_seconds_override
         if elapsed_seconds_override is not None
-        else ((datetime.now(timezone.utc) - last_seen_at).total_seconds() if last_seen_at else None)
+        else (_trading_seconds(last_seen_at) if last_seen_at else None)
     )
 
     if skip_market_adjustment:
@@ -216,6 +217,23 @@ def _build_stock_out(db: Session, item: WatchlistItem) -> StockOut:
     current_volume = snapshot.volume
     freshness = classify_freshness(snapshot.fetched_at, now_utc)
     checkpoint_price = item.last_seen_price or current_price
+
+    # When markets are closed and the checkpoint equals the current price
+    # (stock hasn't moved since last weekend fetch), use the most recent
+    # historically distinct price as the baseline — this shows the last
+    # real trading-day signal rather than all-zeros, which is meaningless.
+    if not market_open and abs(current_price - checkpoint_price) < 0.01:
+        distinct_snap = (
+            db.query(PriceSnapshot)
+            .filter(
+                PriceSnapshot.symbol == item.symbol,
+                PriceSnapshot.price != current_price,
+            )
+            .order_by(PriceSnapshot.fetched_at.desc())
+            .first()
+        )
+        if distinct_snap and distinct_snap.price > 0:
+            checkpoint_price = distinct_snap.price
 
     sensitivity = getattr(item, "sensitivity", "normal") or "normal"
     fields = _compute_score_fields(

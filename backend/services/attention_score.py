@@ -13,7 +13,9 @@ untouched for months doesn't wash every future move out to z ~ 0.
 """
 
 import logging
+from datetime import datetime, time, timezone
 from math import sqrt
+from zoneinfo import ZoneInfo
 
 import numpy as np
 from sqlalchemy.orm import Session
@@ -25,12 +27,49 @@ logger = logging.getLogger(__name__)
 HIGH_THRESHOLD = 2.0
 MEDIUM_THRESHOLD = 1.0
 
-# Matches services/scheduler.py's poll_prices interval — the unit volatility
-# is measured in.
 TICK_SECONDS = 30
-# Cap elapsed time at 30 days' worth of ticks so a stale, long-forgotten
-# checkpoint doesn't dilute every future move toward z ~ 0.
 MAX_ELAPSED_SECONDS = 30 * 24 * 3600
+
+# Trading-hours constants (IST)
+_IST = ZoneInfo("Asia/Kolkata")
+_MARKET_OPEN = time(9, 15)
+_MARKET_CLOSE = time(15, 30)
+_TRADING_SECONDS_PER_DAY = int((15 * 3600 + 30 * 60) - (9 * 3600 + 15 * 60))  # 22500s = 6h15m
+
+
+def trading_seconds_elapsed(since: datetime, until: datetime | None = None) -> float:
+    """Count only IST market-open seconds between two UTC datetimes.
+
+    Wall-clock elapsed time is wrong for a watchlist: a stock you haven't
+    checked since Friday 3:29pm and one you forgot over the weekend have
+    accumulated zero additional 'market risk' during the non-trading hours.
+    Using trading seconds means a 48-hour weekend gap counts as 0 elapsed
+    ticks — the same as a 10-minute gap during market hours from the
+    market's perspective. The Z-score time-decay is therefore calibrated
+    to actual market exposure, not clock time.
+    """
+    if until is None:
+        until = datetime.now(timezone.utc)
+    since_ist = since.astimezone(_IST)
+    until_ist = until.astimezone(_IST)
+    if until_ist <= since_ist:
+        return 0.0
+
+    total = 0.0
+    current = since_ist
+    while current.date() <= until_ist.date():
+        if current.weekday() < 5:  # Mon-Fri
+            day_open = datetime.combine(current.date(), _MARKET_OPEN, tzinfo=_IST)
+            day_close = datetime.combine(current.date(), _MARKET_CLOSE, tzinfo=_IST)
+            seg_start = max(current, day_open)
+            seg_end = min(until_ist, day_close)
+            if seg_end > seg_start:
+                total += (seg_end - seg_start).total_seconds()
+        # advance to next day 00:00
+        from datetime import timedelta
+        next_day = datetime.combine(current.date(), time(0, 0), tzinfo=_IST) + timedelta(days=1)
+        current = next_day
+    return min(total, float(MAX_ELAPSED_SECONDS))
 
 
 def _get_recent_snapshots(db: Session, symbol: str, limit: int = 20) -> list[PriceSnapshot]:
