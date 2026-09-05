@@ -2,6 +2,8 @@
 
 **What has meaningfully changed in your watchlist — since you last checked?**
 
+![Tests](https://img.shields.io/badge/tests-59%20passed-brightgreen) ![Python](https://img.shields.io/badge/python-3.12-blue) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688) ![React](https://img.shields.io/badge/React-18-61dafb) ![Live](https://img.shields.io/badge/demo-live%20on%20Render-success)
+
 Groww Pulse replaces raw percentage changes with statistically rigorous attention scores. A 2% move on a calm stock is louder than a 5% move on a volatile one. Pulse tells you which one actually matters.
 
 Built for **Code, by Groww 2026**.
@@ -141,34 +143,34 @@ See [`RESILIENCE.md`](RESILIENCE.md) for the full specification and [`DECISIONS.
 
 ## Architecture
 
+```mermaid
+graph TB
+    User["👤 User (Browser)"]
+    React["React 18 + Vite SPA<br/>Render Static Site"]
+    WS["WebSocket<br/>exponential backoff"]
+    API["FastAPI Backend<br/>Render Web Service"]
+    Sched["Scheduler<br/>poll_prices 30s<br/>poll_index 60s"]
+    CB["Circuit Breaker<br/>CLOSED → OPEN → HALF_OPEN"]
+    Zscore["Z-Score Engine<br/>β-residual · VIX regime<br/>trading-hours elapsed"]
+    PG["PostgreSQL<br/>PriceSnapshot · WatchlistItem<br/>MarketIndices · CheckpointHistory"]
+    YF["yfinance<br/>NSE live prices"]
+    Snap["Offline Snapshot<br/>offline_snapshot.json"]
+
+    User -- "HTTPS REST" --> React
+    React -- "REST /api/*" --> API
+    React -- "WSS /ws" --> WS
+    WS --> API
+    API --> Zscore
+    API --> Sched
+    Sched --> CB
+    CB -- "CLOSED: live fetch" --> YF
+    CB -- "OPEN: cached" --> Snap
+    Zscore --> PG
+    Sched --> PG
+    API --> PG
 ```
-┌─────────────────────────────────────────────────────┐
-│                  nginx : 80                          │
-│   /api/* → backend:8001    /* → React SPA            │
-└────────────┬────────────────────────────────────────┘
-             │
-┌────────────▼────────────────────────────────────────┐
-│              FastAPI Backend : 8001                  │
-│                                                      │
-│  ┌─────────────┐  ┌──────────────┐  ┌────────────┐  │
-│  │  Scheduler  │  │   Routers    │  │  Services  │  │
-│  │  poll_prices│  │  /watchlist  │  │  Z-score   │  │
-│  │  poll_index │  │  /markets    │  │  circuit   │  │
-│  │  (30s / 60s)│  │  /auth       │  │  breaker   │  │
-│  └──────┬──────┘  └──────┬───────┘  └────────────┘  │
-│         │                │                           │
-│  ┌──────▼────────────────▼──────────────────────┐    │
-│  │         PostgreSQL — PriceSnapshot,          │    │
-│  │         WatchlistItem, MarketIndices,        │    │
-│  │         CheckpointHistory, SymbolStats       │    │
-│  └──────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────┘
-             │
-┌────────────▼──────────┐
-│   yfinance (NSE live) │  ← Circuit breaker wraps every call
-│   Offline snapshot    │  ← Fallback when OPEN
-└───────────────────────┘
-```
+
+**Data flow:** User marks "caught up" → checkpoint saved → prices polled every 30s → Z-score computed against that checkpoint → WebSocket pushes ranked deck → frontend renders HIGH/MEDIUM/LOW badges with explain_why() narratives.
 
 ---
 
@@ -232,14 +234,14 @@ All endpoints under `/api/`. Protected endpoints require `Authorization: Bearer 
 
 ## Key Design Decisions
 
-Documented in [`DECISIONS.md`](DECISIONS.md). Highlights:
+Documented in [`DECISIONS.md`](DECISIONS.md) and the [`docs/adr/`](docs/adr/) folder. Architecture Decision Records:
 
-- **Z-score over raw %** — Magnitude without context is noise
-- **Trading-hours elapsed time** — Weekends don't accumulate market risk
-- **Beta-residual neutralization** — Market-wide moves subtracted before scoring
-- **Circuit breaker over retry** — Protects yfinance rate limit (2000 req/day)
-- **30-day elapsed cap** — Prevents stale checkpoints from washing all signals to zero
-- **Formal invariant tests over coverage** — Tests what matters, not what ran
+| ADR | Decision | Rationale |
+|-----|----------|-----------|
+| [001](docs/adr/001-statistical-z-score-over-threshold-alerts.md) | Z-score over fixed-% threshold | Self-calibrating per stock; a 2% move on σ=0.2% stock is 10σ, not equal to 2% on σ=1.1% |
+| [002](docs/adr/002-circuit-breaker-three-state-fsm.md) | Circuit breaker (3-state FSM) | yfinance is unofficial; graceful degradation to cached snapshot beats silent failures |
+| [003](docs/adr/003-beta-residual-neutralization.md) | Beta-residual neutralization | Broad market rallies flood raw-% watchlists with false positives |
+| [004](docs/adr/004-trading-hours-elapsed-time.md) | Trading-hours elapsed time | Weekend gaps don't represent market exposure; wall-clock time deflates Monday Z-scores |
 
 ---
 

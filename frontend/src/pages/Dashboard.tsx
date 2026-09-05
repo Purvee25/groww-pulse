@@ -8,6 +8,7 @@ import { ScenarioSelector, type ScenarioStock } from '../components/ScenarioSele
 import { MarketRail } from '../components/MarketRail'
 import { WatchlistPicker } from '../components/WatchlistPicker'
 import { useLiveBrief, formatLastChecked } from '../hooks/useWatchlist'
+import { OnboardingModal } from '../components/OnboardingModal'
 import api from '../lib/api'
 
 const PRIORITY_COLORS: Record<string, { bg: string; text: string }> = {
@@ -54,6 +55,7 @@ export function Dashboard() {
 
   return (
     <div style={{ background: 'var(--bg)', color: 'var(--text)', minHeight: '100vh' }}>
+      <OnboardingModal />
       <NavBar />
       <MarketRail items={railItems} />
 

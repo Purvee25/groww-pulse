@@ -171,17 +171,37 @@ export function Explore() {
 
             {!isMarketOpen && (
               <div style={{
-                display: 'flex', alignItems: 'center', gap: '0.625rem',
                 background: 'var(--surface)', border: '1px solid var(--border)',
-                borderRadius: '10px', padding: '0.75rem 1rem', marginBottom: '1rem',
-                fontSize: '0.8rem', color: 'var(--text-muted)',
+                borderRadius: '10px', padding: '1rem', marginBottom: '1rem',
               }}>
-                <span style={{ fontSize: '1rem' }}>🕐</span>
-                <span>
-                  <strong style={{ color: 'var(--text)' }}>NSE is closed.</strong>
-                  {' '}Live movers and attention scores update Mon–Fri 9:15 am – 3:30 pm IST.
-                  Prices shown are from the last trading session.
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  <span style={{ fontSize: '1rem' }}>🕐</span>
+                  <span>
+                    <strong style={{ color: 'var(--text)' }}>NSE is closed.</strong>
+                    {' '}Live scores update Mon–Fri 9:15 am – 3:30 pm IST. Showing last session data.
+                  </span>
+                </div>
+                <div style={{
+                  display: 'flex', gap: '1rem', marginTop: '0.75rem', flexWrap: 'wrap',
+                }}>
+                  {[
+                    { label: 'Next open', value: (() => {
+                      const now = new Date()
+                      const ist = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
+                      const day = ist.getDay()
+                      const daysUntilMon = day === 0 ? 1 : day === 6 ? 2 : 0
+                      if (daysUntilMon > 0) return `Mon 9:15 AM IST`
+                      return 'Tomorrow 9:15 AM IST'
+                    })() },
+                    { label: 'Tracking stocks', value: hasStocks ? 'Your watchlist' : 'Add stocks →' },
+                    { label: 'Data source', value: 'NSE via yfinance' },
+                  ].map(({ label, value }) => (
+                    <div key={label} style={{ fontSize: '0.78rem' }}>
+                      <div style={{ color: 'var(--text-muted)', marginBottom: '0.15rem' }}>{label}</div>
+                      <div style={{ fontWeight: 600, color: 'var(--text)' }}>{value}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
             {moversLoading ? (
