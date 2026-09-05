@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import api from '../lib/api'
 
 const LINKS = [
   { to: '/explore', label: 'Explore' },
@@ -28,6 +29,22 @@ export function NavBar() {
   const location = useLocation()
   const navigate = useNavigate()
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
+  const [circuitState, setCircuitState] = useState<'CLOSED' | 'OPEN' | 'HALF_OPEN'>('CLOSED')
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    const pollCircuit = async () => {
+      try {
+        const res = await api.get('/health/circuit')
+        setCircuitState(res.data.state ?? 'CLOSED')
+      } catch {
+        // silently ignore — circuit info is non-critical UI
+      }
+    }
+    pollCircuit()
+    intervalRef.current = setInterval(pollCircuit, 15000)
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
+  }, [])
 
   useEffect(() => {
     const saved = localStorage.getItem('groww-pulse-theme') as 'light' | 'dark' | null
@@ -98,6 +115,24 @@ export function NavBar() {
       </nav>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        {/* Circuit breaker status pill */}
+        <span style={{
+          display: 'flex', alignItems: 'center', gap: '0.35rem',
+          fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.4px',
+          padding: '0.25rem 0.6rem', borderRadius: '999px',
+          background: circuitState === 'CLOSED' ? 'rgba(0,208,156,0.12)' : 'rgba(245,158,11,0.15)',
+          color: circuitState === 'CLOSED' ? 'var(--success, #00D09C)' : '#F59E0B',
+          border: `1px solid ${circuitState === 'CLOSED' ? 'rgba(0,208,156,0.3)' : 'rgba(245,158,11,0.3)'}`,
+          transition: 'all 300ms',
+          whiteSpace: 'nowrap',
+        }}>
+          <span style={{
+            width: '6px', height: '6px', borderRadius: '50%',
+            background: circuitState === 'CLOSED' ? 'var(--success, #00D09C)' : '#F59E0B',
+            boxShadow: `0 0 5px ${circuitState === 'CLOSED' ? 'rgba(0,208,156,0.8)' : 'rgba(245,158,11,0.8)'}`,
+          }} />
+          {circuitState === 'CLOSED' ? 'LIVE NSE' : 'CB: CACHED'}
+        </span>
         <button onClick={toggleTheme} aria-label="Toggle theme" style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           width: '34px', height: '34px', borderRadius: '8px',

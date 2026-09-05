@@ -28,6 +28,22 @@ export function Landing() {
 
   const goToRegister = () => navigate('/register')
 
+  const handleDemoLogin = async () => {
+    try {
+      const res = await api.post('/auth/login', {
+        email: 'demo@groww.in',
+        password: 'demo1234',
+      })
+      const token = res.data.token
+      if (token) {
+        localStorage.setItem('token', token)
+        navigate('/explore')
+      }
+    } catch {
+      navigate('/login')
+    }
+  }
+
   const ctaButtonStyle = {
     background: 'var(--brand)',
     color: 'white',
@@ -200,15 +216,31 @@ export function Landing() {
         }}>
           Watchlists show % changes. That's noisy. A 2% move on a calm stock matters more than 5% on a volatile one.
         </p>
-        <button
-          onClick={goToRegister}
-          onMouseDown={handlePressDown}
-          onMouseUp={handlePressUp}
-          onMouseLeave={handlePressUp}
-          style={ctaButtonStyle}
-        >
-          Get Started
-        </button>
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <button
+            onClick={goToRegister}
+            onMouseDown={handlePressDown}
+            onMouseUp={handlePressUp}
+            onMouseLeave={handlePressUp}
+            style={ctaButtonStyle}
+          >
+            Get Started
+          </button>
+          <button
+            onClick={handleDemoLogin}
+            onMouseDown={handlePressDown}
+            onMouseUp={handlePressUp}
+            onMouseLeave={handlePressUp}
+            style={{
+              ...ctaButtonStyle,
+              background: 'transparent',
+              border: '1.5px solid var(--brand)',
+              color: 'var(--brand)',
+            }}
+          >
+            ⚡ Try Demo
+          </button>
+        </div>
       </section>
 
       {/* Problem Section */}

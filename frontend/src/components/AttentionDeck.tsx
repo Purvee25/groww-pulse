@@ -534,7 +534,7 @@ function ExpandedDetail({ item }: { item: BriefItem }) {
 
       {item.week_52_high != null && item.week_52_low != null && (
         <div style={{ marginBottom: '0.75rem' }}>
-          <RangeBar low={item.week_52_low} high={item.week_52_high} current={item.price} label="52-week" />
+          <RangeBar low={item.week_52_low} high={item.week_52_high} current={item.price} label />
         </div>
       )}
 

@@ -51,8 +51,6 @@ export function Dashboard() {
   }))
 
   const now = Date.now()
-  const listsWithActivity = worthALook.length > 0 ? 1 : 0
-  const totalLists = 1 // single active list
 
   return (
     <div style={{ background: 'var(--bg)', color: 'var(--text)', minHeight: '100vh' }}>

@@ -18,6 +18,7 @@ from routers.ws_router import router as ws_router
 from services.scheduler import start_scheduler, stop_scheduler
 from seed_metadata import seed_metadata
 from seed_demo import seed_demo
+from services.circuit_breaker import get_circuit_state
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -169,3 +170,10 @@ app.include_router(ws_router)
 @app.get("/api/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/api/health/circuit")
+def circuit_health() -> dict:
+    """Expose circuit breaker state so the frontend telemetry ribbon can show
+    LIVE NSE FEED vs CIRCUIT BREAKER: CACHED."""
+    return get_circuit_state()

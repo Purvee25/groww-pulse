@@ -6,6 +6,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from database import SessionLocal
 from models import PriceSnapshot, WatchlistItem, MarketIndices, SymbolStats
 from services.market_data import fetch_quote, fetch_index_quote, fetch_symbol_stats
+from services.circuit_breaker import fetch_with_breaker, get_circuit_state
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +30,12 @@ def poll_prices() -> None:
     db = SessionLocal()
     try:
         for symbol in symbols:
-            quote = fetch_quote(symbol)
+            quote, source = fetch_with_breaker(fetch_quote, symbol)
             if quote is None:
-                logger.warning("No quote for %s", symbol)
+                logger.warning("No quote for %s (source=%s)", symbol, source)
                 continue
+            if source == "CACHED_FALLBACK":
+                logger.info("Circuit breaker active — serving cached snapshot for %s", symbol)
             db.add(
                 PriceSnapshot(
                     symbol=symbol,
