@@ -68,6 +68,15 @@ export function Explore() {
   const [indicesLoading, setIndicesLoading] = useState(true)
   const [tab, setTab] = useState<'gainers' | 'losers'>('gainers')
 
+  // Derive market-open status from IST clock (Mon–Fri 09:15–15:30)
+  const isMarketOpen = (() => {
+    const now = new Date()
+    const ist = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
+    const day = ist.getDay()
+    const minutes = ist.getHours() * 60 + ist.getMinutes()
+    return day >= 1 && day <= 5 && minutes >= 555 && minutes < 930 // 9:15–15:30
+  })()
+
   useEffect(() => {
     api.get('/markets/indices').then(r => {
       setIndices(r.data.indices ?? [])
@@ -160,6 +169,21 @@ export function Explore() {
               </div>
             </div>
 
+            {!isMarketOpen && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '0.625rem',
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                borderRadius: '10px', padding: '0.75rem 1rem', marginBottom: '1rem',
+                fontSize: '0.8rem', color: 'var(--text-muted)',
+              }}>
+                <span style={{ fontSize: '1rem' }}>🕐</span>
+                <span>
+                  <strong style={{ color: 'var(--text)' }}>NSE is closed.</strong>
+                  {' '}Live movers and attention scores update Mon–Fri 9:15 am – 3:30 pm IST.
+                  Prices shown are from the last trading session.
+                </span>
+              </div>
+            )}
             {moversLoading ? (
               <div style={{ display: 'flex', gap: '0.75rem', overflow: 'hidden' }}>
                 {Array.from({ length: 5 }).map((_, i) => (
