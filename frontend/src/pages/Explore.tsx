@@ -6,7 +6,7 @@ import api from '../lib/api'
 
 interface Mover { symbol: string; price: number; change_pct: number }
 interface IndexData { name: string; price: number; change_pct: number }
-interface WatchlistSpot { symbol: string; company_name: string; price: number; price_change_pct: number; priority: string; narrative: string }
+interface WatchlistSpot { symbol: string; company_name: string; price: number; stock_return_pct: number; price_change_pct?: number; priority: string; narrative: string }
 
 function ArrowIcon({ up }: { up: boolean }) {
   return (
@@ -80,7 +80,7 @@ export function Explore() {
     }).catch(() => setMoversLoading(false))
 
     api.get('/watchlist').then(r => {
-      const items: WatchlistSpot[] = (r.data.items ?? [])
+      const items: WatchlistSpot[] = (r.data.stocks ?? [])
         .filter((i: WatchlistSpot) => i.priority === 'HIGH' || i.priority === 'MEDIUM')
         .slice(0, 3)
       setSpotlight(items)
@@ -244,7 +244,7 @@ export function Explore() {
               {spotlight.length > 0 ? (
                 <>
                   {spotlight.map((item, i) => {
-                    const positive = item.price_change_pct >= 0
+                    const positive = (item.stock_return_pct ?? 0) >= 0
                     const dotColor = item.priority === 'HIGH' ? 'var(--red)' : item.priority === 'MEDIUM' ? 'var(--attention, #B8862B)' : 'var(--border)'
                     return (
                       <div key={item.symbol} style={{
@@ -257,7 +257,7 @@ export function Explore() {
                             <span style={{ fontSize: '0.82rem', fontWeight: 700 }}>{item.symbol.replace('.NS', '')}</span>
                           </div>
                           <span style={{ fontSize: '0.78rem', fontWeight: 700, fontFamily: 'var(--mono)', color: positive ? 'var(--green)' : 'var(--red)' }}>
-                            {positive ? '+' : ''}{item.price_change_pct.toFixed(2)}%
+                            {positive ? '+' : ''}{(item.stock_return_pct ?? 0).toFixed(2)}%
                           </span>
                         </div>
                         <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>

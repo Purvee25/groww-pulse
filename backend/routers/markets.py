@@ -1,13 +1,13 @@
 """Market data endpoints: indices, metadata, movers."""
 
 import asyncio
+import yfinance as yf
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends
 
 from database import get_db
 from models import MarketIndices, SymbolMetadata
-from services.market_data import fetch_quote
 
 router = APIRouter(prefix="/api/markets", tags=["markets"])
 
@@ -63,19 +63,23 @@ _NSE100_SYMBOLS = [
 ]
 
 
+def _fetch_mover(sym: str):
+    try:
+        info = yf.Ticker(sym).fast_info
+        price = getattr(info, "last_price", None) or getattr(info, "previous_close", None)
+        prev = getattr(info, "previous_close", None)
+        if not price or not prev or prev == 0:
+            return None
+        change_pct = (price - prev) / prev * 100
+        return {"symbol": sym.replace(".NS", ""), "price": round(float(price), 2), "change_pct": round(float(change_pct), 2)}
+    except Exception:
+        return None
+
+
 @router.get("/movers")
 async def get_market_movers():
     """Top gainers and losers from NSE large-cap universe."""
-    async def _fetch(sym: str):
-        try:
-            q = await asyncio.to_thread(fetch_quote, sym)
-            if q and q.get("price"):
-                return {"symbol": sym.replace(".NS", ""), "price": q["price"], "change_pct": q.get("change_pct", 0.0)}
-        except Exception:
-            pass
-        return None
-
-    results = await asyncio.gather(*[_fetch(s) for s in _NSE100_SYMBOLS])
+    results = await asyncio.gather(*[asyncio.to_thread(_fetch_mover, s) for s in _NSE100_SYMBOLS])
     valid = [r for r in results if r is not None]
     valid.sort(key=lambda x: x["change_pct"], reverse=True)
     return {
