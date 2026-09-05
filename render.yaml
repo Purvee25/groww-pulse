@@ -29,7 +29,6 @@ services:
   - type: web
     name: groww-pulse-frontend
     runtime: static
-    plan: free
     rootDir: frontend
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
