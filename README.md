@@ -208,7 +208,7 @@ Email:    demo@groww.in
 Password: demo1234
 ```
 
-The demo watchlist has 6 NSE stocks pre-seeded with realistic signals, theses, and price history.
+The demo watchlist has 11 NSE stocks pre-seeded with realistic signals, theses, and price history.
 
 ---
 
