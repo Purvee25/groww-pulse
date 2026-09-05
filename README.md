@@ -145,25 +145,25 @@ See [`RESILIENCE.md`](RESILIENCE.md) for the full specification and [`DECISIONS.
 
 ```mermaid
 graph TB
-    User["👤 User (Browser)"]
-    React["React 18 + Vite SPA<br/>Render Static Site"]
-    WS["WebSocket<br/>exponential backoff"]
-    API["FastAPI Backend<br/>Render Web Service"]
-    Sched["Scheduler<br/>poll_prices 30s<br/>poll_index 60s"]
-    CB["Circuit Breaker<br/>CLOSED → OPEN → HALF_OPEN"]
-    Zscore["Z-Score Engine<br/>β-residual · VIX regime<br/>trading-hours elapsed"]
-    PG["PostgreSQL<br/>PriceSnapshot · WatchlistItem<br/>MarketIndices · CheckpointHistory"]
-    YF["yfinance<br/>NSE live prices"]
-    Snap["Offline Snapshot<br/>offline_snapshot.json"]
+    User["👤 User"]
+    React["React 18 + Vite\nRender Static Site"]
+    WS["WebSocket\n+ polling fallback"]
+    API["FastAPI Backend\nRender Web Service"]
+    Sched["Scheduler\npoll_prices 30s / poll_index 60s"]
+    CB["Circuit Breaker\nCLOSED → OPEN → HALF_OPEN"]
+    Zscore["Z-Score Engine\nβ-residual · VIX · time-decay"]
+    PG["PostgreSQL\nPriceSnapshot · WatchlistItem\nMarketIndices · CheckpointHistory"]
+    YF["yfinance\nNSE live prices"]
+    Snap["Offline Snapshot\noffline_snapshot.json"]
 
-    User -- "HTTPS REST" --> React
-    React -- "REST /api/*" --> API
+    User -- "HTTPS" --> React
+    React -- "REST /api" --> API
     React -- "WSS /ws" --> WS
     WS --> API
     API --> Zscore
     API --> Sched
     Sched --> CB
-    CB -- "CLOSED: live fetch" --> YF
+    CB -- "CLOSED: live" --> YF
     CB -- "OPEN: cached" --> Snap
     Zscore --> PG
     Sched --> PG
