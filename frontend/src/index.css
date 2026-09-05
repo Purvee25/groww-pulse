@@ -270,3 +270,55 @@ input:focus-visible, textarea:focus-visible {
     width: 100%;
   }
 }
+
+/* ── Mobile responsive ───────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* NavBar: compress on small screens */
+  header nav a { padding: 0.625rem 0.75rem !important; font-size: 0.82rem !important; }
+  header { padding: 0 1rem !important; }
+  header span[style*="fontWeight: 700"] { display: none !important; }
+
+  /* Explore two-column → single column */
+  .explore-two-col { grid-template-columns: 1fr !important; }
+
+  /* Watchlist table: hide signal column label, compress */
+  .watchlist-table-header,
+  .watchlist-table-row {
+    grid-template-columns: 1fr 80px 80px !important;
+  }
+  .watchlist-signal-col { display: none !important; }
+
+  /* Portfolio risk cards */
+  .portfolio-risk-grid { grid-template-columns: 1fr !important; }
+
+  /* MarketRail: smaller text */
+  .marquee-item { font-size: 0.75rem !important; padding: 0 0.75rem !important; }
+
+  /* General page padding */
+  main { padding: 1.25rem 1rem 3rem !important; }
+
+  /* AttentionDeck cards: full width */
+  .attention-deck { grid-template-columns: 1fr !important; }
+
+  /* Movers scroll horizontal */
+  .movers-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Journal entries: single col */
+  .journal-grid { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 480px) {
+  /* NavBar: icon only on very small screens */
+  header nav a span { display: none; }
+  header nav a::after { content: attr(data-icon); }
+
+  /* Index cards: 2 per row instead of 5 */
+  .index-card-grid { grid-template-columns: repeat(2, 1fr) !important; }
+
+  /* Watchlist: hide change column too */
+  .watchlist-table-header,
+  .watchlist-table-row {
+    grid-template-columns: 1fr 80px !important;
+  }
+  .watchlist-change-col { display: none !important; }
+}

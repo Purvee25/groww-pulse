@@ -56,7 +56,7 @@ export function useWatchlist(watchlistId?: number | null) {
   return { brief, loading, marking, errorMsg, lastChecked, stockCount, totalChange, loadBrief, handleMarkCaughtUp }
 }
 
-const WS_BASE = 'ws://localhost:8001/ws'
+const WS_BASE = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
 const RECONNECT_BASE_MS = 1000
 const RECONNECT_MAX_MS = 30_000
 const POLL_INTERVAL_MS = 30_000
