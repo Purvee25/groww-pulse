@@ -17,6 +17,7 @@ from routers.markets import router as markets_router
 from routers.ws_router import router as ws_router
 from services.scheduler import start_scheduler, stop_scheduler
 from seed_metadata import seed_metadata
+from seed_demo import seed_demo
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -135,6 +136,7 @@ async def lifespan(app: FastAPI):
     with engine.connect() as conn:
         _run_migrations(conn.connection)
     seed_metadata()
+    seed_demo()
     start_scheduler()
     prune_task = asyncio.create_task(_prune_history_loop())
     yield

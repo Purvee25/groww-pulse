@@ -4,6 +4,18 @@
 
 Built for the **Code, by Groww** hackathon.
 
+## Screenshots
+
+| Explore | Watchlist |
+|---------|-----------|
+| ![Explore page](docs/screenshots/explore.png) | ![Watchlist page](docs/screenshots/watchlist.png) |
+
+| Journal | Login |
+|---------|-------|
+| ![Journal page](docs/screenshots/journal.png) | ![Login page](docs/screenshots/login.png) |
+
+---
+
 ## The Problem
 
 Traditional watchlists treat all price movements equally. A 2% drop in volatile energy stock means nothing, but the same move in a normally-quiet IT stock could signal something real. Users waste time checking stocks that haven't meaningfully changed.
