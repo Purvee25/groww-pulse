@@ -143,31 +143,46 @@ See [`RESILIENCE.md`](RESILIENCE.md) for the full specification and [`DECISIONS.
 
 ## Architecture
 
-```mermaid
-graph TB
-    User["👤 User"]
-    React["React 18 + Vite\nRender Static Site"]
-    WS["WebSocket\n+ polling fallback"]
-    API["FastAPI Backend\nRender Web Service"]
-    Sched["Scheduler\npoll_prices 30s / poll_index 60s"]
-    CB["Circuit Breaker\nCLOSED → OPEN → HALF_OPEN"]
-    Zscore["Z-Score Engine\nβ-residual · VIX · time-decay"]
-    PG["PostgreSQL\nPriceSnapshot · WatchlistItem\nMarketIndices · CheckpointHistory"]
-    YF["yfinance\nNSE live prices"]
-    Snap["Offline Snapshot\noffline_snapshot.json"]
-
-    User -- "HTTPS" --> React
-    React -- "REST /api" --> API
-    React -- "WSS /ws" --> WS
-    WS --> API
-    API --> Zscore
-    API --> Sched
-    Sched --> CB
-    CB -- "CLOSED: live" --> YF
-    CB -- "OPEN: cached" --> Snap
-    Zscore --> PG
-    Sched --> PG
-    API --> PG
+```
+                        ┌──────────────────┐
+                        │   Browser (User)  │
+                        └────────┬─────────┘
+                    HTTPS REST   │   WSS /ws
+                     ┌───────────┘    │
+                     ▼                ▼
+          ┌──────────────────┐  ┌──────────────────┐
+          │  React 18 + Vite  │  │   WebSocket      │
+          │  Render Static    │  │   + poll fallback │
+          └────────┬──────────┘  └────────┬─────────┘
+                   │  REST /api            │
+                   └──────────┬────────────┘
+                              ▼
+                   ┌──────────────────────┐
+                   │   FastAPI Backend     │
+                   │   Render Web Service  │
+                   └──┬──────────┬────────┘
+                      │          │
+          ┌───────────┘          └────────────────┐
+          ▼                                        ▼
+ ┌─────────────────┐                   ┌──────────────────────┐
+ │   Scheduler      │                   │   Z-Score Engine      │
+ │  poll_prices 30s │                   │  β-residual · VIX ×   │
+ │  poll_index 60s  │                   │  trading-hours / √n   │
+ └────────┬─────────┘                   └──────────┬───────────┘
+          │                                         │
+          ▼                                         ▼
+ ┌─────────────────┐              ┌──────────────────────────────┐
+ │ Circuit Breaker  │              │         PostgreSQL            │
+ │ CLOSED→OPEN      │              │  PriceSnapshot · WatchlistItem│
+ │    →HALF_OPEN    │              │  MarketIndices · Checkpoint   │
+ └──┬────────────┬──┘              └──────────────────────────────┘
+    │            │
+    │ CLOSED     │ OPEN
+    ▼            ▼
+┌────────┐  ┌──────────────┐
+│yfinance│  │Offline       │
+│NSE live│  │Snapshot.json │
+└────────┘  └──────────────┘
 ```
 
 **Data flow:** User marks "caught up" → checkpoint saved → prices polled every 30s → Z-score computed against that checkpoint → WebSocket pushes ranked deck → frontend renders HIGH/MEDIUM/LOW badges with explain_why() narratives.
