@@ -26,6 +26,7 @@ from services.attention_score import (
     compute_avg_volume,
     compute_volatility,
     compute_z_score,
+    explain_why,
     narrate,
     thesis_watchdog,
 )
@@ -174,6 +175,7 @@ def _compute_score_fields(
         stock_return_pct, z_score, volume_ratio, current_price,
         week_52_high=week_52_high, week_52_low=week_52_low, sector_adjusted=sector_adjusted,
     )
+    why_str = explain_why(priority, stock_return_pct, z_score, sector_adjusted=sector_adjusted, volume_ratio=volume_ratio)
     verdict, verdict_reason = thesis_watchdog(thesis, priority, stock_return_pct, z_score)
 
     return {
@@ -183,6 +185,7 @@ def _compute_score_fields(
         "attention_score": score,
         "priority": priority,
         "narrative": narrative_str,
+        "why": why_str,
         "z_score": round(z_score, 2),
         "regime": regime,
         "vix": vix,
@@ -205,6 +208,7 @@ def _build_stock_out(db: Session, item: WatchlistItem) -> StockOut:
             attention_score=0.0,
             priority="LOW",
             narrative="No price data yet",
+            why="Not flagged: no price history yet — check back after the next market update.",
             freshness="stale",
             is_market_open=market_open,
             thesis=item.thesis,
@@ -252,6 +256,7 @@ def _build_stock_out(db: Session, item: WatchlistItem) -> StockOut:
         attention_score=fields["attention_score"],
         priority=fields["priority"],
         narrative=fields["narrative"],
+        why=fields["why"],
         freshness=freshness,
         week_52_high=fields["week_52_high"],
         week_52_low=fields["week_52_low"],

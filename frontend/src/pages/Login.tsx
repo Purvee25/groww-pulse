@@ -11,11 +11,21 @@ export function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [demoLoading, setDemoLoading] = useState(false)
+  // Render's free tier spins the backend down after ~15min idle; the first
+  // request after that takes 20-50s to wake it. Without this, that window
+  // just looks like a hang — this tells the judge/user what's happening.
+  const [waking, setWaking] = useState(false)
 
   const loginWithCredentials = async (loginEmail: string, loginPassword: string) => {
-    const response = await authApi.login(loginEmail, loginPassword)
-    localStorage.setItem('token', response.data.token)
-    navigate('/dashboard')
+    const wakeTimer = setTimeout(() => setWaking(true), 3500)
+    try {
+      const response = await authApi.login(loginEmail, loginPassword)
+      localStorage.setItem('token', response.data.token)
+      navigate('/dashboard')
+    } finally {
+      clearTimeout(wakeTimer)
+      setWaking(false)
+    }
   }
 
   const handleDemoLogin = async () => {
@@ -46,6 +56,7 @@ export function Login() {
       return
     }
 
+    const wakeTimer = setTimeout(() => setWaking(true), 3500)
     try {
       setLoading(true)
       const response = await authApi.login(email, password)
@@ -64,6 +75,8 @@ export function Login() {
         setError('Login failed')
       }
     } finally {
+      clearTimeout(wakeTimer)
+      setWaking(false)
       setLoading(false)
     }
   }
@@ -128,6 +141,24 @@ export function Login() {
         <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '1.5rem', textAlign: 'center' }}>
           Welcome Back
         </h2>
+
+        {waking && (
+          <div style={{
+            background: 'var(--info-bg)',
+            border: '1px solid var(--brand)',
+            color: 'var(--brand)',
+            padding: '0.75rem 1rem',
+            borderRadius: '0.5rem',
+            marginBottom: '1.5rem',
+            fontSize: '0.85rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+          }} role="status">
+            <span>⏳</span>
+            <span>Waking up the server — this is a free-tier host that sleeps when idle, first request can take up to a minute.</span>
+          </div>
+        )}
 
         {error && (
           <div style={{

@@ -6,7 +6,7 @@ import api from '../lib/api'
 
 interface Mover { symbol: string; price: number; change_pct: number }
 interface IndexData { name: string; price: number; change_pct: number }
-interface WatchlistSpot { symbol: string; company_name: string; price: number; stock_return_pct: number; price_change_pct?: number; priority: string; narrative: string }
+interface WatchlistSpot { symbol: string; company_name: string; price: number; stock_return_pct: number; price_change_pct?: number; priority: string; narrative: string; why?: string }
 
 function ArrowIcon({ up }: { up: boolean }) {
   return (
@@ -290,6 +290,11 @@ export function Explore() {
                         <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
                           {item.narrative}
                         </p>
+                        {item.why && (
+                          <p style={{ margin: '0.25rem 0 0', fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.5, fontStyle: 'italic' }}>
+                            {item.why}
+                          </p>
+                        )}
                       </div>
                     )
                   })}

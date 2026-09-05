@@ -48,6 +48,7 @@ class StockOut(BaseModel):
     attention_score: float
     priority: Priority
     narrative: str
+    why: str
     freshness: Freshness
     is_market_open: bool
     thesis: str | None = None

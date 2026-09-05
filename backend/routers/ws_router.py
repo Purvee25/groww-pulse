@@ -24,6 +24,7 @@ from services.attention_score import (
     compute_avg_volume,
     compute_volatility,
     compute_z_score,
+    explain_why,
     narrate,
     thesis_watchdog,
 )
@@ -96,6 +97,7 @@ def _build_brief_payload(user_email: str) -> list[dict]:
                 stock_return * 100, z_score, volume_ratio, current_price,
                 week_52_high=w52h, week_52_low=w52l, sector_adjusted=sector_adjusted,
             )
+            why = explain_why(priority, stock_return * 100, z_score, sector_adjusted=sector_adjusted, volume_ratio=volume_ratio)
             verdict, verdict_reason = thesis_watchdog(item.thesis, priority, stock_return * 100, z_score)
             freshness = classify_freshness(snapshot.fetched_at, now)
 
@@ -106,6 +108,7 @@ def _build_brief_payload(user_email: str) -> list[dict]:
                 "attention_score": round(score, 2),
                 "priority": priority,
                 "narrative": narrative,
+                "why": why,
                 "freshness": freshness,
                 "is_market_open": market_open,
                 "thesis": item.thesis,

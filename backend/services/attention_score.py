@@ -166,6 +166,9 @@ def classify_priority(score: float) -> str:
     return "LOW"
 
 
+LARGE_MOVE_PCT_THRESHOLD = 5.0
+
+
 def narrate(
     stock_return_pct: float,
     z_score: float,
@@ -182,7 +185,36 @@ def narrate(
         parts.append("broke 52w high")
     elif week_52_low and current_price <= week_52_low:
         parts.append("broke 52w low")
+    # A big % move can still score LOW if it accumulated over a long absence —
+    # without this, "+40% · 0.1σ · LOW" reads as a contradiction instead of
+    # "this drift is unremarkable spread across N days."
+    if abs(stock_return_pct) >= LARGE_MOVE_PCT_THRESHOLD and abs(z_score) < MEDIUM_THRESHOLD:
+        parts.append("in line with time since last check")
     return " · ".join(parts)
+
+
+def explain_why(
+    priority: str,
+    stock_return_pct: float,
+    z_score: float,
+    sector_adjusted: bool = False,
+    volume_ratio: float = 1.0,
+) -> str:
+    """One plain-English sentence a non-technical reader can act on, distinct
+    from the compact `narrative` string used on the card itself. Judges and
+    first-time users shouldn't have to reverse-engineer a z-score to know why
+    something was flagged — or wasn't."""
+    basis = "beyond what the sector did" if sector_adjusted else "for this stock's own volatility"
+    direction = "up" if stock_return_pct > 0 else "down" if stock_return_pct < 0 else "flat"
+
+    if priority == "HIGH":
+        vol_note = f" on {volume_ratio:.1f}× normal volume" if volume_ratio >= 1.5 else ""
+        return f"Flagged: this move is statistically unusual {basis}{vol_note} — worth a look."
+    if priority == "MEDIUM":
+        return f"Flagged: {direction} move is somewhat unusual {basis} — not extreme, but above normal noise."
+    if abs(stock_return_pct) >= LARGE_MOVE_PCT_THRESHOLD:
+        return f"Not flagged: the {abs(stock_return_pct):.1f}% move is large in absolute terms, but unremarkable {basis} once time and volatility are accounted for."
+    return f"Not flagged: this move is within normal noise {basis}."
 
 
 def thesis_watchdog(

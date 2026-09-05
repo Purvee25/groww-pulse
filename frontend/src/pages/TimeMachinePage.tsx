@@ -17,6 +17,7 @@ interface ReplayResult {
   attention_score: number
   priority: 'HIGH' | 'MEDIUM' | 'LOW'
   narrative: string
+  why?: string
   regime: string
   vix: number | null
   thesis_verdict: string | null
@@ -240,9 +241,14 @@ export function TimeMachinePage() {
                 </div>
               </div>
 
-              <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 1rem', fontSize: '0.95rem' }}>
+              <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 0.5rem', fontSize: '0.95rem' }}>
                 {result.narrative}
               </p>
+              {result.why && (
+                <p style={{ color: 'var(--text-muted)', lineHeight: 1.6, margin: '0 0 1rem', fontSize: '0.85rem', fontStyle: 'italic' }}>
+                  {result.why}
+                </p>
+              )}
 
               {result.thesis_verdict && (
                 <div style={{
