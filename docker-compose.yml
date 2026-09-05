@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: groww-pulse-db
+    environment:
+      POSTGRES_USER: groww_user
+      POSTGRES_PASSWORD: groww_password
+      POSTGRES_DB: groww_pulse
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U groww_user -d groww_pulse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - groww-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: groww-pulse-backend
+    environment:
+      DATABASE_URL: postgresql://groww_user:groww_password@postgres:5432/groww_pulse
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: 10080
+      FRONTEND_ORIGIN: http://localhost
+      PYTHONUNBUFFERED: 1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - groww-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: groww-pulse-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - groww-network
+
+volumes:
+  postgres_data:
+
+networks:
+  groww-network:
+    driver: bridge

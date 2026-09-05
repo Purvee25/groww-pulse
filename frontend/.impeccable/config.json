@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "layout-transition",
+        "value": "*",
+        "files": [
+          "src/components/AttentionDeck.tsx"
+        ],
+        "createdAt": "2026-09-05T05:36:52.536Z",
+        "reason": "dot-nav pill width 6→20px expand; scaleX distorts border-radius, no transform equivalent for this pattern"
+      }
+    ]
+  }
+}
