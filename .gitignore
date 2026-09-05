@@ -16,6 +16,8 @@ eggs/
 .eggs/
 lib/
 lib64/
+# Allow frontend src lib (Python rule above would otherwise catch it)
+!frontend/src/lib/
 parts/
 sdist/
 var/
